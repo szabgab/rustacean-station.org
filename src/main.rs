@@ -25,17 +25,43 @@ fn empty_string() -> String {
 fn main() -> Result<()> {
     let site = PathBuf::from("_site");
     fs::create_dir_all(&site).expect(format!("Failed to create {site:?} directory").as_str());
-    for file in ["style.css", "404.html", "robots.txt"] {
-        //let path = format!("src/{file}");
-        //let path = PathBuf::from(path);
-        fs::copy(file, site.join(file))
-            .expect(format!("Failed to copy {file} to site directory").as_str());
-    }
-    // fs::copy("index.html", site.join("index.html"))
-    //     .expect("Failed to copy index.html to site directory");
+    remove_content_of_site_directory(&site)?;
+    copy_static_files(&site)?;
 
     let episodes = load_episodes()?;
     print!("{} episodes loaded", episodes.len());
+
+    Ok(())
+}
+
+// Keep the folder itself so a static server can serve it without restarting
+fn remove_content_of_site_directory(site: &PathBuf) -> Result<()> {
+    if !site.exists() {
+        return Ok(());
+    }
+    if !site.is_dir() {
+        bail!("Site path is not a directory: {site:?}");
+    }
+    // Remove all files and directories in the _site directory
+    for entry in fs::read_dir(site).expect("Failed to read _site directory") {
+        let entry = entry.expect("Failed to read entry");
+        let path = entry.path();
+        if path.is_dir() {
+            fs::remove_dir_all(&path)
+                .expect(format!("Failed to remove directory: {path:?}").as_str());
+        } else {
+            fs::remove_file(&path).expect(format!("Failed to remove file: {path:?}").as_str());
+        }
+    }
+    Ok(())
+}
+
+fn copy_static_files(site: &PathBuf) -> Result<()> {
+    for file in ["style.css", "404.html", "robots.txt"] {
+        fs::copy(file, site.join(file))
+            .expect(format!("Failed to copy {file} to site directory").as_str());
+    }
+    copy_dir::copy_dir("images", site.join("images"))?;
 
     Ok(())
 }
