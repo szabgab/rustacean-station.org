@@ -1,7 +1,8 @@
-use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
-use chrono::{DateTime, Utc};
 
+use anyhow::{Result, bail};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Episode {
@@ -21,23 +22,25 @@ fn empty_string() -> String {
     String::new()
 }
 
-fn main() {
-
+fn main() -> Result<()> {
     let site = PathBuf::from("_site");
     fs::create_dir_all(&site).expect(format!("Failed to create {site:?} directory").as_str());
     for file in ["style.css", "404.html", "robots.txt"] {
         //let path = format!("src/{file}");
         //let path = PathBuf::from(path);
-        fs::copy(file, site.join(file)).expect(format!("Failed to copy {file} to site directory").as_str());
+        fs::copy(file, site.join(file))
+            .expect(format!("Failed to copy {file} to site directory").as_str());
     }
     // fs::copy("index.html", site.join("index.html"))
     //     .expect("Failed to copy index.html to site directory");
 
-    let episodes = load_episodes();
+    let episodes = load_episodes()?;
     print!("{} episodes loaded", episodes.len());
+
+    Ok(())
 }
 
-fn load_episodes() -> Vec<Episode> {
+fn load_episodes() -> Result<Vec<Episode>> {
     let mut episodes = vec![];
     let serieses = fs::read_dir("_episodes").expect("Failed to read _episodes directory");
     for series in serieses {
@@ -55,22 +58,7 @@ fn load_episodes() -> Vec<Episode> {
                 panic!("Not a markdown file: {}", path.display());
             }
 
-            //println!("Found episode: {}", path.display());
-            let content = fs::read_to_string(&path).expect("Failed to read file");
-            if !content.starts_with("---\n") {
-                panic!("File does not start with '---': {}", path.display());
-            }
-            let index: Option<usize> = content[4..].find("---").map(|i| i + 4);
-            let index = index.unwrap_or_else(|| {
-                panic!(
-                    "File does not contain the second '---', the end of the front-matter : {path:?}"
-                )
-            });
-            let mut episode = match serde_yml::from_str::<Episode>(&content[4..index]) {
-                Ok(front_matter) => front_matter,
-                Err(err) => panic!("Failed to parse front matter: {err} in {path:?}"),
-            };
-            episode.body = content[index + 4..].to_string();
+            let episode = load_episode(&path)?;
             // if episode.slug.is_none() {
             //     eprintln!("Missing slug in front matter: {path:?}");
             // }
@@ -81,5 +69,68 @@ fn load_episodes() -> Vec<Episode> {
         }
     }
 
-    episodes
+    Ok(episodes)
+}
+
+fn load_episode(path: &PathBuf) -> Result<Episode> {
+    //println!("Found episode: {}", path.display());
+    let content = fs::read_to_string(&path)?;
+    //println!("Loading episode: {}", content);
+    if !content.starts_with("---\n") {
+        bail!("File does not start with '---': {}", path.display());
+    }
+    let index: Option<usize> = content[4..].find("---").map(|i| i + 4);
+    let index = index.unwrap_or_else(|| {
+        panic!("File does not contain the second '---', the end of the front-matter : {path:?}")
+    });
+    //println!("Raw Front-matter: {}", &content[4..index]);
+    let mut episode = match serde_yml::from_str::<Episode>(&content[4..index]) {
+        Ok(front_matter) => front_matter,
+        Err(err) => panic!("Failed to parse front matter: {err} in {path:?}"),
+    };
+    episode.body = content[index + 4..].to_string();
+
+    Ok(episode)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_episodes() {
+        let episodes = load_episodes().unwrap();
+        assert!(!episodes.is_empty(), "No episodes loaded");
+        for episode in &episodes {
+            assert!(!episode.title.is_empty(), "Episode title is empty");
+            assert!(!episode.file.is_empty(), "Episode file is empty");
+            assert!(!episode.duration.is_empty(), "Episode duration is empty");
+            assert!(!episode.length.is_empty(), "Episode length is empty");
+        }
+    }
+
+    #[test]
+    fn test_load_missing_file() {
+        let episode = load_episode(&PathBuf::from("test_cases/blabla.md"));
+        match episode {
+            Ok(_) => panic!("Expected error loading missing file"),
+            Err(err) => {
+                assert_eq!(err.to_string(), "No such file or directory (os error 2)");
+            }
+        }
+    }
+
+    #[test]
+    fn test_load_empty() {
+        let episode = load_episode(&PathBuf::from("test_cases/empty.md"));
+        match episode {
+            Ok(_) => panic!("Expected error loading empty file"),
+            Err(err) => {
+                assert_eq!(
+                    err.to_string(),
+                    "File does not start with '---': test_cases/empty.md"
+                );
+            }
+        }
+    }
 }
