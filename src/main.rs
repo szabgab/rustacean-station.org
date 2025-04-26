@@ -23,16 +23,29 @@ fn empty_string() -> String {
 }
 
 fn main() -> Result<()> {
+    env_logger::init();
+
     let site = PathBuf::from("_site");
     fs::create_dir_all(&site).expect(format!("Failed to create {site:?} directory").as_str());
     remove_content_of_site_directory(&site)?;
     copy_static_files(&site)?;
 
     let episodes = load_episodes()?;
-    print!("{} episodes loaded", episodes.len());
+    log::info!("{} episodes loaded", episodes.len());
+    generate_html(&episodes)?;
 
     Ok(())
 }
+
+fn generate_html(episodes: &Vec<Episode>) -> Result<()> {
+    for episode in episodes {
+        log::debug!("Episode: {episode:?}");
+        log::info!("Episode: {}", episode.title);
+    }
+
+    Ok(())
+}
+    
 
 // Keep the folder itself so a static server can serve it without restarting
 fn remove_content_of_site_directory(site: &PathBuf) -> Result<()> {
@@ -71,11 +84,11 @@ fn load_episodes() -> Result<Vec<Episode>> {
     let serieses = fs::read_dir("_episodes").expect("Failed to read _episodes directory");
     for series in serieses {
         let series = series.expect("Failed to read entry");
-        //println!("{entry:?}");
+        log::debug!("{series:?}");
         let entries = fs::read_dir(series.path()).expect("Failed to read directory");
         for entry in entries {
             let entry = entry.expect("Failed to read entry");
-            //println!("{entry:?}");
+            log::debug!("{entry:?}");
             let path = entry.path();
             let extension = path
                 .extension()
@@ -99,9 +112,9 @@ fn load_episodes() -> Result<Vec<Episode>> {
 }
 
 fn load_episode(path: &PathBuf) -> Result<Episode> {
-    //println!("Found episode: {}", path.display());
+    log::debug!("Load episode: {}", path.display());
     let content = fs::read_to_string(&path)?;
-    //println!("Loading episode: {}", content);
+    log::debug!("Loading episode: {}", content);
     if !content.starts_with("---\n") {
         bail!("File does not start with '---': {}", path.display());
     }
@@ -109,7 +122,7 @@ fn load_episode(path: &PathBuf) -> Result<Episode> {
     let index = index.unwrap_or_else(|| {
         panic!("File does not contain the second '---', the end of the front-matter : {path:?}")
     });
-    //println!("Raw Front-matter: {}", &content[4..index]);
+    log::debug!("Raw Front-matter: {}", &content[4..index]);
     let mut episode = match serde_yml::from_str::<Episode>(&content[4..index]) {
         Ok(front_matter) => front_matter,
         Err(err) => panic!("Failed to parse front matter: {err} in {path:?}"),
