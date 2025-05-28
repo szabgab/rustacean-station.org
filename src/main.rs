@@ -23,7 +23,7 @@ fn empty_string() -> String {
 }
 
 const ABNORMAL_DASH: char = '⁃';
-//const SMART_QUOTES: &str = "[“‘’”]";
+const SMART_QUOTES: [char; 4] = ['“', '‘', '’', '”'];
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -119,6 +119,14 @@ fn load_episode(path: &PathBuf) -> Result<Episode> {
     log::debug!("Loading episode: {}", content);
     if content.contains(ABNORMAL_DASH) {
         bail!("Abnormal dash found in: {}", path.display());
+    }
+    for quote in SMART_QUOTES {
+        if content.contains(quote) {
+            bail!(
+                "Smart quote found in: {}. Please replace it with a normal quote.",
+                path.display()
+            );
+        }
     }
     if !content.starts_with("---\n") {
         bail!("File does not start with '---': {}", path.display());
@@ -218,6 +226,20 @@ mod tests {
                 assert_eq!(
                     err.to_string(),
                     "Abnormal dash found in: test_cases/abnormal_dash.md"
+                )
+            }
+        }
+    }
+
+    #[test]
+    fn test_smart_quote() {
+        let episode = load_episode(&PathBuf::from("test_cases/smart_quote_1.md"));
+        match episode {
+            Ok(_) => panic!("Expected error loading file with smart quote"),
+            Err(err) => {
+                assert_eq!(
+                    err.to_string(),
+                    "Smart quote found in: test_cases/smart_quote_1.md. Please replace it with a normal quote."
                 )
             }
         }
