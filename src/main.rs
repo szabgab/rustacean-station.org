@@ -45,7 +45,6 @@ fn generate_html(episodes: &Vec<Episode>) -> Result<()> {
 
     Ok(())
 }
-    
 
 // Keep the folder itself so a static server can serve it without restarting
 fn remove_content_of_site_directory(site: &PathBuf) -> Result<()> {
@@ -125,7 +124,7 @@ fn load_episode(path: &PathBuf) -> Result<Episode> {
     log::debug!("Raw Front-matter: {}", &content[4..index]);
     let mut episode = match serde_yml::from_str::<Episode>(&content[4..index]) {
         Ok(front_matter) => front_matter,
-        Err(err) => panic!("Failed to parse front matter: {err} in {path:?}"),
+        Err(err) => bail!("Failed to parse front matter: {err} in {path:?}"),
     };
     episode.body = content[index + 4..].to_string();
 
@@ -168,6 +167,20 @@ mod tests {
                 assert_eq!(
                     err.to_string(),
                     "File does not start with '---': test_cases/empty.md"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_load_invalid_date() {
+        let episode = load_episode(&PathBuf::from("test_cases/invalid_date.md"));
+        match episode {
+            Ok(_) => panic!("Expected error loading file with invalid date"),
+            Err(err) => {
+                assert_eq!(
+                    err.to_string(),
+                    "Failed to parse front matter: date: input is out of range at line 2 column 7 in \"test_cases/invalid_date.md\""
                 );
             }
         }
