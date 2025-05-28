@@ -118,9 +118,12 @@ fn load_episode(path: &PathBuf) -> Result<Episode> {
         bail!("File does not start with '---': {}", path.display());
     }
     let index: Option<usize> = content[4..].find("---").map(|i| i + 4);
-    let index = index.unwrap_or_else(|| {
-        panic!("File does not contain the second '---', the end of the front-matter : {path:?}")
-    });
+    let index = match index {
+        Some(index) => index,
+        None => {
+            bail!("File does not contain the second '---', the end of the front-matter : {path:?}")
+        }
+    };
     log::debug!("Raw Front-matter: {}", &content[4..index]);
     let mut episode = match serde_yml::from_str::<Episode>(&content[4..index]) {
         Ok(front_matter) => front_matter,
@@ -182,6 +185,19 @@ mod tests {
                     err.to_string(),
                     "Failed to parse front matter: date: input is out of range at line 2 column 7 in \"test_cases/invalid_date.md\""
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn test_missing_end_of_header() {
+        let episode = load_episode(&PathBuf::from("test_cases/missing_end_of_header.md"));
+        match episode {
+            Ok(_) => panic!("Expected error loading file with invalid date"),
+            Err(err) => {
+                assert!(err.to_string().starts_with(
+                    "File does not contain the second '---', the end of the front-matter"
+                ),);
             }
         }
     }
