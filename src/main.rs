@@ -22,6 +22,9 @@ fn empty_string() -> String {
     String::new()
 }
 
+const ABNORMAL_DASH: char = '⁃';
+//const SMART_QUOTES: &str = "[“‘’”]";
+
 fn main() -> Result<()> {
     env_logger::init();
 
@@ -114,6 +117,9 @@ fn load_episode(path: &PathBuf) -> Result<Episode> {
     log::debug!("Load episode: {}", path.display());
     let content = fs::read_to_string(&path)?;
     log::debug!("Loading episode: {}", content);
+    if content.contains(ABNORMAL_DASH) {
+        bail!("Abnormal dash found in: {}", path.display());
+    }
     if !content.starts_with("---\n") {
         bail!("File does not start with '---': {}", path.display());
     }
@@ -195,9 +201,24 @@ mod tests {
         match episode {
             Ok(_) => panic!("Expected error loading file with invalid date"),
             Err(err) => {
-                assert!(err.to_string().starts_with(
-                    "File does not contain the second '---', the end of the front-matter"
-                ),);
+                assert_eq!(
+                    err.to_string(),
+                    "File does not contain the second '---', the end of the front-matter : \"test_cases/missing_end_of_header.md\""
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_abnormal_dash() {
+        let episode = load_episode(&PathBuf::from("test_cases/abnormal_dash.md"));
+        match episode {
+            Ok(_) => panic!("Expected error loading file with abnormal dash"),
+            Err(err) => {
+                assert_eq!(
+                    err.to_string(),
+                    "Abnormal dash found in: test_cases/abnormal_dash.md"
+                )
             }
         }
     }
