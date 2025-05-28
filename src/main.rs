@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::{fs, path::PathBuf};
 
 use anyhow::{Result, bail};
@@ -14,8 +15,15 @@ struct Episode {
     length: String,
     reddit: Option<String>,
 
+    #[serde(default = "empty_path")]
+    path: PathBuf,
+
     #[serde(default = "empty_string")]
     body: String,
+}
+
+fn empty_path() -> PathBuf {
+    PathBuf::new()
 }
 
 fn empty_string() -> String {
@@ -108,6 +116,20 @@ fn load_episodes() -> Result<Vec<Episode>> {
             // }
             episodes.push(episode);
         }
+
+        // No duplicate URLs
+        let mut files: HashMap<String, PathBuf> = HashMap::new();
+        for episode in &episodes {
+            log::debug!("Checking episode: {}", episode.file);
+            files.insert(episode.file.clone(), episode.path.clone());
+        }
+
+        // No duplicate slugs
+        // For collections, jekyll _only_ uses the basename (without date) of each
+        // post for the slug, and doesn't error on duplicates. So we must check.
+        // get the part of the filename after the date, that is the slug
+        // _episodes/*/????-??-??-$slug)
+        // bail!("Duplicate slugs found: ${files[*]}")
     }
 
     Ok(episodes)
@@ -128,6 +150,21 @@ fn load_episode(path: &PathBuf) -> Result<Episode> {
             );
         }
     }
+    // timecodes should never start a line (should be in header or list)
+    // '^\[@' "$episode"
+    // bail!("Timecode not in list or header of {}", path.display()
+
+    // timecode listings need to not have empty lines, or we'll get
+    //
+    //   <li><p>[@HH:MM:SS]
+    //
+    // which doesn't render right. it happens to work for timecode
+    // listings that have sub-listings, but easiest to check that there
+    // just aren't any gaps.
+
+    //  if ! awk '/^\s*$/ { empty = 1; next; } /^\s*-\s*\[@[0-9]/ { if (in_list == 1 && empty == 1) { exit 1; } else { in_list = 1; empty = 0; next; } } /^\s*-/ { empty = 0; next; } { in_list = 0; empty = 0; }' "$episode"; then
+    // bail!("Empty lines between list items in {}", path.display()
+
     if !content.starts_with("---\n") {
         bail!("File does not start with '---': {}", path.display());
     }
@@ -143,6 +180,7 @@ fn load_episode(path: &PathBuf) -> Result<Episode> {
         Ok(front_matter) => front_matter,
         Err(err) => bail!("Failed to parse front matter: {err} in {path:?}"),
     };
+    episode.path = path.to_owned();
     episode.body = content[index + 4..].to_string();
 
     Ok(episode)
