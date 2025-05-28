@@ -41,7 +41,7 @@ fn main() -> Result<()> {
     remove_content_of_site_directory(&site)?;
     copy_static_files(&site)?;
 
-    let episodes = load_episodes()?;
+    let episodes = load_episodes("_episodes")?;
     log::info!("{} episodes loaded", episodes.len());
     generate_html(&episodes)?;
 
@@ -89,9 +89,9 @@ fn copy_static_files(site: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn load_episodes() -> Result<Vec<Episode>> {
+fn load_episodes(path: &str) -> Result<Vec<Episode>> {
     let mut episodes = vec![];
-    let serieses = fs::read_dir("_episodes").expect("Failed to read _episodes directory");
+    let serieses = fs::read_dir(path).expect("Failed to read {path} directory");
     for series in serieses {
         let series = series.expect("Failed to read entry");
         log::debug!("{series:?}");
@@ -120,7 +120,15 @@ fn load_episodes() -> Result<Vec<Episode>> {
         // No duplicate URLs
         let mut files: HashMap<String, PathBuf> = HashMap::new();
         for episode in &episodes {
-            log::debug!("Checking episode: {}", episode.file);
+            let mp3 = episode.file.clone();
+            if files.contains_key(&mp3) {
+                bail!(
+                    "The same mp3 file {} was used twice in {} and in {}",
+                    mp3,
+                    files.get(&mp3).unwrap().display(),
+                    episode.path.display()
+                );
+            }
             files.insert(episode.file.clone(), episode.path.clone());
         }
 
@@ -192,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_load_episodes() {
-        let episodes = load_episodes().unwrap();
+        let episodes = load_episodes("_episodes").unwrap();
         assert!(!episodes.is_empty(), "No episodes loaded");
         for episode in &episodes {
             assert!(!episode.title.is_empty(), "Episode title is empty");
@@ -278,6 +286,20 @@ mod tests {
                 assert_eq!(
                     err.to_string(),
                     "Smart quote found in: test_cases/smart_quote_1.md. Please replace it with a normal quote."
+                )
+            }
+        }
+    }
+
+    #[test]
+    fn test_duplicate_mp3_file() {
+        let result = load_episodes("test_cases/duplicate_file");
+        match result {
+            Ok(_) => panic!("Expected error loading duplicate mp3 files"),
+            Err(err) => {
+                assert!(
+                    err.to_string()
+                        .starts_with("The same mp3 file https://blabla.mp3 was used twice")
                 )
             }
         }
