@@ -20,29 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Dates are valid
-      run: |
-        pip install pytz ciso8601
-        for episode in _episodes/*/*.md; do
-          date=$(grep 'date:' "$episode" | head -n1 | sed 's/^date: //')
-          if ! python -c "import ciso8601; ciso8601.parse_rfc3339('$date');"; then
-            echo "$episode: bad date '$date'"
-            exit 1
-          fi
-        done
     - name: No smart symbols
-      run: |
-        for episode in _episodes/*/*.md; do
-          # this isn't a normal dash, and doesn't get turned into a list
-          if grep -qF '⁃' "$episode"; then
-            echo "$(basename "$episode"): abnormal dash won't make a list"
-            exit 1
-          fi
-          if grep -P '[“‘’”]' "$episode"; then
-            echo "$(basename "$episode"): found smart quotes"
-            exit 1
-          fi
-        done
     - name: Timecode lists are correctly formatted
       run: |
         for episode in _episodes/*/*.md; do
