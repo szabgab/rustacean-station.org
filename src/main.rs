@@ -43,15 +43,22 @@ fn main() -> Result<()> {
 
     let episodes = load_episodes("_episodes")?;
     log::info!("{} episodes loaded", episodes.len());
-    generate_html(&episodes)?;
+    generate_html(&episodes, &site)?;
 
     Ok(())
 }
 
-fn generate_html(episodes: &Vec<Episode>) -> Result<()> {
+fn generate_html(episodes: &Vec<Episode>, site: &PathBuf) -> Result<()> {
+    let episode_path = &site.join("episode");
+    fs::create_dir_all(episode_path).expect(format!("Failed to create {episode_path:?} directory").as_str());
+
+
     for episode in episodes {
         log::debug!("Episode: {episode:?}");
         log::info!("Episode: {}", episode.title);
+        let slug = &episode.slug.clone().unwrap();
+        let path = episode_path.join(&slug);
+        fs::create_dir_all(&path).expect(format!("Failed to create {path:?} directory").as_str());
     }
 
     Ok(())
@@ -190,6 +197,20 @@ fn load_episode(path: &PathBuf) -> Result<Episode> {
     };
     episode.path = path.to_owned();
     episode.body = content[index + 4..].to_string();
+
+    // 2020-07-21-twir-348
+    let slug = path
+        .file_stem()
+        .expect(format!("Failed to get file stem: {path:?}").as_str())
+        .to_str()
+        .expect(format!("Failed to convert file stem to str: {path:?}").as_str())
+        .to_string();
+    // TODO check if prefix of the filename is a YYYY-MM-DD-
+    let slug = slug[11..].to_owned();
+    log::warn!("Slug: {slug} from {path:?}");
+    if episode.slug.is_none() {
+        episode.slug = Some(slug);
+    }
 
     Ok(episode)
 }
